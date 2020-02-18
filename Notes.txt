@@ -1,0 +1,47 @@
+Authors notes
+
+16 x 2 LCD controlled via power line
+This 16x2 LCD is too traditional and still very much popular in the world of electronics and embedded system. I remember I started programming on PIC for displaying text on these LCDs around 8 years ago. Now I just found one of these LCD from my junk box and want to try it out because it is nostalgic. It reminded me the 4 bit data lines plus additional 2 control pins, a total of 6 minimum signal pins and obviously additional 2 mandatory power wires +5v and GND, so a total of 8 wires. If this display is designed in 2019, for sure it will have only Vcc, GND and a single wire data pin or in worst case the 2 wire i2c or TWI.
+
+   Then I just thought why even 1 wire for data? Because we can easily multiplex the 1 wire data line with the Vcc line by keeping a diode + capacitor combination towards the LCD power supply pin.
+I am using an arduino board to do the serial to parallel conversion + some packet parsing and lcd backlight brightness control. I am not a huge fan of Arduino but for this simple proof of concept, I don't want to bring out a Makefile folder with muliple files. I picked the Arduino UART RX as the serial receiver. RX pin is connected directly to the input Vcc, but before the schottky diode. After the diode a capacitor is used to hold the DC voltage when the Vcc gets modulated with the UART TX of the other end. Better explained in the below pic.
+
+
+     (video demo of python script initializing the lcd and there after streaming data on second line)
+
+I haven't written any LCD related initialization in the arduino, I just used it for serial to parallel converter + backlight LED contrast control. So the entire display initialization could be sent from current-buffered UART port. There are 4 types of single byte commands which is implemented inside the arduino.
+
+(x is lower nibble, command is higher nibble)
+0xA[x] where x is the lower nibble which will be placed on LCD pins 4 to 7
+0xB[x] where if x is 1, RS will be SET HIGH, if zero, RS will be cleared or SET LOW.
+0xC[x] where if x is 1, EN will be SET HIGH, if zero, EN will be cleared or SET LOW.
+0xD[x] where if x is PWM value for LED backlight, its range is from 0 to 15 where it gives max brightness at 15.
+
+I am using a USB to UART converter to connect the device to my laptop. A python script is doing the lcd initialization and data streaming. A small modulator circuit is used to convert the UART TX low power signal to a power signal which can load high current. I cannot use the TX pin as it is because it cannot load the current which is required to operate the LCD with backlight. So this buffer circuit is used and I am using 9600 baudrate so that the 2.2K resistor is low enough to maintain the fall time when the output stage MOSFET  is OFF.  
+
+
+
+         (Left mosfet: AO3400A n-channel,  right mosfet AO3401A p-channel)
+Both mosfets are power mosfets with a bit higher current rating (say 5A) and for this application 200mA mosfets can also do the job,  but I don't have such low current rated mosfets, so I just used what ever available with me. We can do with NPN, PNP BJT aswell, but in that case, series base resistors needs to be connected to prevent base burnout).
+
+
+The circuit and it's working is self-explanatory.  Default level of UART TX is high. So the left mosfet will be ON by default which turns ON the right side P-channel mosfet. This provides 5V power to the output, when uart TX  sends any bytes, it starts lowering the TX pin and that will cut the 5V power and the 2.2K output resistor will pull the power rail to zero. This zero is reflected to the arduino RX pin, but since there is a diode and a capacitor, the capacitor holds enough power to maintain the display circuitry to work when the power input is modulated to zero by the UART. The role of diode is to prevent reverse discharge of the capacitor and there by allowing the diode front-end voltage to follow the UART TX by not corrupting it. A schotkky diode is preferred. Also a low dropout is more preferred because this old LCD is kind of more strict about 5V input, if not the display fades, and there are some workarounds by giving negative voltage to VEE pin etc. So anyways, the RX pin see the signal as pure incoming UART bytes and it decode the byte according to the above mentioned 4 type of packets. It accordingly set the data lines, EN pin and RS pin.
+Now a simple python script from PC side can imitate the LCD command and data along with the EN and RS control, the same was how we do with a microcontroller. The good part of this setup is that it is just working with 2 wires which provides the power to the system, so may be we can say a kind of simple DC power line communication.
+
+
+Photos:
+
+
+
+
+
+    (arduino nano or micro (or what ever)  on bottom side of LCD with the diode + capacitor)
+
+
+ (modulator or in other word, a powerful high current capable UART TX )     
+
+Fimware and python script:
+
+https://github.com/vinodstanur/16x2_LCD_WITH_DATA_OVER_POWER_LINE
+
+
